@@ -1,9 +1,11 @@
 > tyx fork note:
 >
-> 这个 fork 主要用于在无 sudo 的开发机上更方便地使用 Bear，并解决 `compile_commands.json` 中编译器可执行文件路径不稳定的问题。
+> 这个 fork 主要用于在无 sudo 的开发机上更方便地使用 Bear，并解决在 preload 模式下 `compile_commands.json` 的编译器可执行文件路径无法稳定输出为绝对路径的问题（例如激活 conda 环境后，系统里可能存在多个 `g++`）。
 >
-> - 新增 `format.entries.compiler_executable`：在上游默认 `file-name` 之外，支持 `full-path` 与 `resolved-path`。
-> - `resolved-path`：当拦截到的编译器是短名（例如 `g++`）时，使用当次执行捕获到的 `PATH` 解析为绝对路径（例如 conda 激活后解析为 `.../envs/cpp_dev/bin/g++`），并写入条目的 `arguments[0]`。
+> - 新增 `format.entries.compiler_executable`，用于控制写入条目 `arguments[0]` 的编译器字段表现形式：
+>   - `file-name`（上游默认）：只写 basename（例如 `g++`），更便携但不够稳定。
+>   - `full-path`：写入 Bear 捕获到的可执行文件路径原值；若拦截上报本身就是绝对路径（例如 `execve("/usr/bin/g++", ...)` 或 wrapper 模式上报的真实路径），则会是绝对路径；但若上报的是短名（`execvp("g++", ...)`），依旧会是 `g++`。
+>   - `resolved-path`：在 `full-path` 基础上，若捕获到的是短名（例如 `g++`），则使用当次执行捕获到的 `PATH` 解析为绝对路径（例如 conda 激活后解析为 `.../envs/cpp_dev/bin/g++`）；解析失败则回退到原值。
 > - 本 fork 的 `bear/build.rs` 将默认安装前缀指向 `~/.local/bear`（适配无 sudo 环境）；如在其他机器复用，请按需调整该路径或改为打包/环境变量方案。
 >
 > 最小配置示例（Linux + preload）：
