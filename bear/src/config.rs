@@ -311,11 +311,39 @@ mod types {
         pub use_array_format: bool,
         #[serde(default = "default_enabled")]
         pub include_output_field: bool,
+        /// Controls how the compiler executable is written into `arguments[0]` in the
+        /// JSON compilation database.
+        ///
+        /// - `file-name` (default): write only the basename (e.g. `g++`). More portable.
+        /// - `full-path`: write the full path (e.g. `/opt/.../bin/g++`). More stable but less portable.
+        /// - `resolved-path`: like `full-path`, but if the executable is reported as a
+        ///   short name (e.g. `g++`), resolve it using the captured `PATH` environment.
+        #[serde(default)]
+        pub compiler_executable: CompilerExecutable,
+    }
+
+    /// How to represent the compiler executable in compilation database entries.
+    #[derive(Copy, Clone, Debug, Default, PartialEq, serde::Deserialize, serde::Serialize)]
+    pub enum CompilerExecutable {
+        /// Use only the basename of the compiler executable (e.g. `clang++`).
+        #[default]
+        #[serde(rename = "file-name")]
+        FileName,
+        /// Use the full path to the compiler executable (e.g. `/usr/bin/clang++`).
+        #[serde(rename = "full-path")]
+        FullPath,
+        /// Resolve `g++`-style short names to an absolute path using the captured `PATH`.
+        #[serde(rename = "resolved-path")]
+        ResolvedPath,
     }
 
     impl Default for EntryFormat {
         fn default() -> Self {
-            Self { use_array_format: true, include_output_field: true }
+            Self {
+                use_array_format: true,
+                include_output_field: true,
+                compiler_executable: CompilerExecutable::FileName,
+            }
         }
     }
 
@@ -981,7 +1009,11 @@ pub mod loader {
                 duplicates: DuplicateFilter { match_on: vec![OutputFields::File, OutputFields::Directory] },
                 format: Format {
                     paths: PathFormat { directory: PathResolver::Canonical, file: PathResolver::Canonical },
-                    entries: EntryFormat { use_array_format: true, include_output_field: true },
+                    entries: EntryFormat {
+                        use_array_format: true,
+                        include_output_field: true,
+                        compiler_executable: CompilerExecutable::FileName,
+                    },
                 },
             };
 
@@ -1012,7 +1044,11 @@ pub mod loader {
                 duplicates: DuplicateFilter { match_on: vec![OutputFields::File, OutputFields::Arguments] },
                 format: Format {
                     paths: PathFormat { directory: PathResolver::AsIs, file: PathResolver::AsIs },
-                    entries: EntryFormat { use_array_format: true, include_output_field: true },
+                    entries: EntryFormat {
+                        use_array_format: true,
+                        include_output_field: true,
+                        compiler_executable: CompilerExecutable::FileName,
+                    },
                 },
             };
 
@@ -1044,7 +1080,11 @@ pub mod loader {
                 duplicates: DuplicateFilter { match_on: vec![OutputFields::File, OutputFields::Arguments] },
                 format: Format {
                     paths: PathFormat { directory: PathResolver::Absolute, file: PathResolver::Absolute },
-                    entries: EntryFormat { use_array_format: true, include_output_field: true },
+                    entries: EntryFormat {
+                        use_array_format: true,
+                        include_output_field: true,
+                        compiler_executable: CompilerExecutable::FileName,
+                    },
                 },
             };
 

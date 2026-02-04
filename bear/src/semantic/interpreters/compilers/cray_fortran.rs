@@ -221,11 +221,7 @@ impl Interpreter for CrayFortranInterpreter {
         // Parse arguments using Cray Fortran-specific flag definitions
         let parsed = parse_arguments_and_environment(&self.analyzer, execution);
 
-        Some(Command::Compiler(CompilerCommand::new(
-            execution.working_dir.clone(),
-            execution.executable.clone(),
-            parsed,
-        )))
+        Some(Command::Compiler(CompilerCommand::from_execution(execution, parsed)))
     }
 }
 

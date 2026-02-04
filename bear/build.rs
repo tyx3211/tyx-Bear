@@ -29,13 +29,14 @@
 ///                   sequence ("C:\Users\..." breaks); use forward slashes
 ///                   ("C:/Users/..."), escaped backslashes ("C:\\Users\\..."),
 ///                   or a raw string literal (r"C:\Users\...")
-const DEFAULT_WRAPPER_PATH: &str = "/usr/local/libexec/bear";
+// NOTE: customized install prefix for user-local install
+const DEFAULT_WRAPPER_PATH: &str = "/home/tyx/.local/bear/libexec/bear";
 
 /// Default preload library path
 /// Package creators: modify this entire path to change preload library location
 /// Note: $LIB will be expanded at runtime to the appropriate architecture subdirectory
 /// Note for Windows: preload isn't supported; feel free to ignore this path
-const DEFAULT_PRELOAD_PATH: &str = "/usr/local/libexec/bear/$LIB";
+const DEFAULT_PRELOAD_PATH: &str = "/home/tyx/.local/bear/libexec/bear/$LIB";
 
 // =============================================================================
 // PLATFORM-SPECIFIC EXECUTABLE AND LIBRARY NAMES (DO NOT CHANGE THESE)

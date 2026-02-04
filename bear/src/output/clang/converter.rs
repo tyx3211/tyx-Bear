@@ -239,17 +239,26 @@ impl CommandConverter {
                         .collect::<Vec<_>>();
                     command_args.extend(formatted_args);
                 }
-                ArgumentKind::Compiler => {
-                    if let Some(executable_name) = cmd.executable.file_name() {
-                        if let Some(name_str) = executable_name.to_str() {
-                            command_args.push(name_str.to_string());
+                ArgumentKind::Compiler => match self.format.compiler_executable {
+                    config::CompilerExecutable::FileName => {
+                        if let Some(executable_name) = cmd.executable.file_name() {
+                            if let Some(name_str) = executable_name.to_str() {
+                                command_args.push(name_str.to_string());
+                            } else {
+                                command_args.extend(original_args);
+                            }
                         } else {
                             command_args.extend(original_args);
                         }
-                    } else {
-                        command_args.extend(original_args);
                     }
-                }
+                    config::CompilerExecutable::FullPath => {
+                        command_args.push(cmd.executable.to_string_lossy().to_string());
+                    }
+                    config::CompilerExecutable::ResolvedPath => {
+                        let resolved = cmd.resolved_executable.as_ref().unwrap_or(&cmd.executable);
+                        command_args.push(resolved.to_string_lossy().to_string());
+                    }
+                },
                 _ => {
                     // Non-file arguments, use as-is
                     command_args.extend(original_args);
@@ -378,9 +387,10 @@ impl CommandConverter {
 mod tests {
     use super::super::format::{FormatError, MockPathFormatter};
     use super::*;
-    use crate::config::{EntryFormat, Format, PathFormat};
+    use crate::config::{CompilerExecutable, EntryFormat, Format, PathFormat};
     use crate::semantic::{ArgumentKind, Command, CompilerCommand, CompilerPass, PassEffect};
     use std::io;
+    use std::path::PathBuf;
 
     #[test]
     fn test_compiler_command_to_entries_single_source() {
@@ -403,6 +413,75 @@ mod tests {
         let expected = vec![Entry::from_arguments_str(
             "main.c",
             vec!["gcc", "-c", "-Wall", "main.c", "-o", "main.o"],
+            "/home/user",
+            Some("main.o"),
+        )];
+        assert_eq!(entries, expected);
+    }
+
+    #[test]
+    fn test_compiler_command_to_entries_single_source_full_path_compiler_executable() {
+        let command = Command::Compiler(CompilerCommand::from_strings(
+            "/home/user",
+            "/usr/bin/gcc",
+            vec![
+                (ArgumentKind::Compiler, vec!["/usr/bin/gcc"]),
+                (ArgumentKind::Other(PassEffect::StopsAt(CompilerPass::Compiling)), vec!["-c"]),
+                (ArgumentKind::Other(PassEffect::None), vec!["-Wall"]),
+                (ArgumentKind::Source, vec!["main.c"]),
+                (ArgumentKind::Output, vec!["-o", "main.o"]),
+            ],
+        ));
+
+        let format = Format {
+            paths: PathFormat::default(),
+            entries: EntryFormat {
+                compiler_executable: CompilerExecutable::FullPath,
+                ..EntryFormat::default()
+            },
+        };
+        let converter = CommandConverter::new(format);
+        let entries = converter.to_entries(&command);
+
+        let expected = vec![Entry::from_arguments_str(
+            "main.c",
+            vec!["/usr/bin/gcc", "-c", "-Wall", "main.c", "-o", "main.o"],
+            "/home/user",
+            Some("main.o"),
+        )];
+        assert_eq!(entries, expected);
+    }
+
+    #[test]
+    fn test_compiler_command_to_entries_single_source_resolved_path_compiler_executable() {
+        let mut compiler_command = CompilerCommand::from_strings(
+            "/home/user",
+            "g++",
+            vec![
+                (ArgumentKind::Compiler, vec!["g++"]),
+                (ArgumentKind::Other(PassEffect::StopsAt(CompilerPass::Compiling)), vec!["-c"]),
+                (ArgumentKind::Other(PassEffect::None), vec!["-Wall"]),
+                (ArgumentKind::Source, vec!["main.cpp"]),
+                (ArgumentKind::Output, vec!["-o", "main.o"]),
+            ],
+        );
+        compiler_command.resolved_executable = Some(PathBuf::from("/opt/conda/bin/g++"));
+
+        let command = Command::Compiler(compiler_command);
+
+        let format = Format {
+            paths: PathFormat::default(),
+            entries: EntryFormat {
+                compiler_executable: CompilerExecutable::ResolvedPath,
+                ..EntryFormat::default()
+            },
+        };
+        let converter = CommandConverter::new(format);
+        let entries = converter.to_entries(&command);
+
+        let expected = vec![Entry::from_arguments_str(
+            "main.cpp",
+            vec!["/opt/conda/bin/g++", "-c", "-Wall", "main.cpp", "-o", "main.o"],
             "/home/user",
             Some("main.o"),
         )];
@@ -463,7 +542,11 @@ mod tests {
         ));
         let format = Format {
             paths: PathFormat::default(),
-            entries: EntryFormat { include_output_field: true, use_array_format: false },
+            entries: EntryFormat {
+                include_output_field: true,
+                use_array_format: false,
+                ..EntryFormat::default()
+            },
         };
         let converter = CommandConverter::new(format);
         let entries = converter.to_entries(&command);
@@ -487,7 +570,11 @@ mod tests {
         ));
         let format = Format {
             paths: PathFormat::default(),
-            entries: EntryFormat { use_array_format: true, include_output_field: false },
+            entries: EntryFormat {
+                use_array_format: true,
+                include_output_field: false,
+                ..EntryFormat::default()
+            },
         };
         let sut = CommandConverter::new(format);
         let result = sut.to_entries(&command);
@@ -506,7 +593,11 @@ mod tests {
         // Test that CommandConverter can be used as a public API
         let format = Format {
             paths: PathFormat::default(),
-            entries: EntryFormat { use_array_format: true, include_output_field: false },
+            entries: EntryFormat {
+                use_array_format: true,
+                include_output_field: false,
+                ..EntryFormat::default()
+            },
         };
         let converter = CommandConverter::new(format);
 
@@ -632,7 +723,7 @@ mod tests {
             .returning(|_, file| Ok(file.to_path_buf()));
 
         let converter = CommandConverter::with_formatter(
-            EntryFormat { include_output_field: true, use_array_format: true },
+            EntryFormat { include_output_field: true, use_array_format: true, ..EntryFormat::default() },
             Box::new(mock_formatter),
         );
 
@@ -716,7 +807,11 @@ mod tests {
     fn test_compile_and_link_filters_linking_flags() {
         let format = Format {
             paths: PathFormat::default(),
-            entries: EntryFormat { use_array_format: true, include_output_field: false },
+            entries: EntryFormat {
+                use_array_format: true,
+                include_output_field: false,
+                ..EntryFormat::default()
+            },
         };
         let converter = CommandConverter::new(format);
 
@@ -881,7 +976,11 @@ mod tests {
     fn test_consistent_formatting_methods() {
         let format = Format {
             paths: PathFormat::default(),
-            entries: EntryFormat { use_array_format: true, include_output_field: true },
+            entries: EntryFormat {
+                use_array_format: true,
+                include_output_field: true,
+                ..EntryFormat::default()
+            },
         };
         let converter = CommandConverter::new(format);
 

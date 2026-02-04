@@ -56,11 +56,7 @@ impl Interpreter for CudaInterpreter {
         // Parse both command-line arguments and environment variables
         let annotated_args = parse_arguments_and_environment(&self.matcher, execution);
 
-        Some(Command::Compiler(CompilerCommand::new(
-            execution.working_dir.clone(),
-            execution.executable.clone(),
-            annotated_args,
-        )))
+        Some(Command::Compiler(CompilerCommand::from_execution(execution, annotated_args)))
     }
 }
 

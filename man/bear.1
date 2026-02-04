@@ -149,6 +149,7 @@ format\f[B]:\f[R]
   entries\f[B]:\f[R]
     use_array_format\f[B]:\f[R] true
     include_output_field\f[B]:\f[R] true
+    compiler_executable\f[B]:\f[R] file-name
 .EE
 .PP
 This example configuration file: sets the interception mode to
@@ -224,6 +225,10 @@ The allowed values are:
 command string
 .IP \[bu] 2
 \f[B]entries.include_output_field\f[R]: Include output field in entries
+.IP \[bu] 2
+\f[B]entries.compiler_executable\f[R]: How to write the compiler in
+\f[CR]arguments[0]\f[R]. Allowed values are: \f[CR]file-name\f[R]
+(default), \f[CR]full-path\f[R] and \f[CR]resolved-path\f[R]
 .SS Default Configuration
 If no configuration file is specified, Bear uses built\-in defaults
 optimized for most use cases.

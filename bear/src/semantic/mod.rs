@@ -35,6 +35,7 @@ pub mod testing;
 use super::intercept::Execution;
 
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::path::{Path, PathBuf};
 
@@ -65,12 +66,15 @@ pub enum Command {
 ///
 /// The [`working_dir`] is the directory where the command is executed,
 /// the [`executable`] is the path to the compiler binary,
+/// the [`resolved_executable`] is the best-effort absolute compiler path resolved
+/// using the captured environment (primarily `PATH`),
 /// while [`arguments`] contains the command-line arguments annotated
 /// with their meaning (e.g., source files, output files, switches).
 #[derive(Debug)]
 pub struct CompilerCommand {
     pub working_dir: PathBuf,
     pub executable: PathBuf,
+    pub resolved_executable: Option<PathBuf>,
     pub arguments: Vec<Box<dyn Arguments>>,
 }
 
@@ -173,6 +177,78 @@ pub enum CompilerPass {
 
 impl CompilerCommand {
     pub fn new(working_dir: PathBuf, executable: PathBuf, arguments: Vec<Box<dyn Arguments>>) -> Self {
-        Self { working_dir, executable, arguments }
+        Self { working_dir, executable, resolved_executable: None, arguments }
+    }
+
+    pub fn from_execution(execution: &Execution, arguments: Vec<Box<dyn Arguments>>) -> Self {
+        let resolved_executable = resolve_compiler_executable(
+            &execution.executable,
+            &execution.working_dir,
+            &execution.environment,
+        );
+
+        Self {
+            working_dir: execution.working_dir.clone(),
+            executable: execution.executable.clone(),
+            resolved_executable,
+            arguments,
+        }
+    }
+}
+
+fn resolve_compiler_executable(
+    executable: &Path,
+    working_dir: &Path,
+    environment: &HashMap<String, String>,
+) -> Option<PathBuf> {
+    // Already an absolute path.
+    if executable.is_absolute() {
+        return Some(executable.to_path_buf());
+    }
+
+    // A path containing separators is not searched in PATH by execvp/spawnp.
+    // Resolve it relative to the working directory (best effort).
+    if executable.components().count() > 1 {
+        let candidate = working_dir.join(executable);
+        return candidate.exists().then_some(candidate);
+    }
+
+    let path_value = environment
+        .iter()
+        .find(|(key, _)| key.eq_ignore_ascii_case(crate::environment::KEY_OS__PATH))
+        .map(|(_, value)| value.as_str())?;
+
+    which::which_in(executable.as_os_str(), Some(path_value), working_dir).ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg(unix)]
+    fn make_executable(path: &Path) {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = std::fs::metadata(path).unwrap().permissions();
+        perms.set_mode(perms.mode() | 0o111);
+        std::fs::set_permissions(path, perms).unwrap();
+    }
+
+    #[test]
+    fn resolve_compiler_executable_resolves_short_name_from_path() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let fake_gpp = temp_dir.path().join("g++");
+        std::fs::write(&fake_gpp, "").unwrap();
+        #[cfg(unix)]
+        make_executable(&fake_gpp);
+
+        let mut env = HashMap::new();
+        env.insert(
+            crate::environment::KEY_OS__PATH.to_string(),
+            temp_dir.path().to_string_lossy().to_string(),
+        );
+
+        let resolved = resolve_compiler_executable(Path::new("g++"), Path::new("/tmp"), &env)
+            .expect("expected a resolved path");
+        assert_eq!(resolved, fake_gpp);
     }
 }

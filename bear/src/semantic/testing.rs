@@ -70,6 +70,7 @@ impl CompilerCommand {
         Self {
             working_dir: PathBuf::from(working_dir),
             executable: PathBuf::from(executable),
+            resolved_executable: None,
             arguments: arguments
                 .into_iter()
                 .map(|(kind, args)| {
