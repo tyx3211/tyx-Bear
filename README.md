@@ -6,7 +6,7 @@
 >   - `file-name`（上游默认）：只写 basename（例如 `g++`），更便携但不够稳定。
 >   - `full-path`：写入 Bear 捕获到的可执行文件路径原值；若拦截上报本身就是绝对路径（例如 `execve("/usr/bin/g++", ...)` 或 wrapper 模式上报的真实路径），则会是绝对路径；但若上报的是短名（`execvp("g++", ...)`），依旧会是 `g++`。
 >   - `resolved-path`：在 `full-path` 基础上，若捕获到的是短名（例如 `g++`），则使用当次执行捕获到的 `PATH` 解析为绝对路径（例如 conda 激活后解析为 `.../envs/cpp_dev/bin/g++`）；解析失败则回退到原值。
-> - 本 fork 的 `bear/build.rs` 将默认安装前缀指向 `~/.local/bear`（适配无 sudo 环境）；如在其他机器复用，请按需调整该路径或改为打包/环境变量方案。
+> - 本 fork 的 `bear/build.rs` 会按 `HOME` 计算默认安装前缀 `${HOME}/.local/bear`（不再写死用户名，适配无 sudo 环境）；如在其他机器复用，请按需调整该路径或改为打包/环境变量方案。
 >
 > 最小配置示例（Linux + preload）：
 >
@@ -14,7 +14,7 @@
 > schema: "4.0"
 > intercept:
 >   mode: preload
->   path: /home/tyx/.local/bear/libexec/bear/lib/x86_64-linux-gnu/libexec.so
+>   path: /home/<your_user>/.local/bear/libexec/bear/lib/x86_64-linux-gnu/libexec.so
 > format:
 >   entries:
 >     compiler_executable: resolved-path

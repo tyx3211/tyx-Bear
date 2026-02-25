@@ -13,10 +13,10 @@
 //!
 //! ```bash
 //! # Example: Change installation to /opt/bear
-//! sed -i 's|/usr/local/libexec/bear|/opt/bear/lib|g' bear/build.rs
+//! sed -i 's|.local/bear/libexec/bear|opt/bear/lib|g' bear/build.rs
 //!
 //! # Example: Use system lib directory
-//! sed -i 's|/usr/local/libexec/bear|/usr/lib/bear|g' bear/build.rs
+//! sed -i 's|.local/bear/libexec/bear|usr/lib/bear|g' bear/build.rs
 //! ```
 
 // =============================================================================
@@ -29,14 +29,17 @@
 ///                   sequence ("C:\Users\..." breaks); use forward slashes
 ///                   ("C:/Users/..."), escaped backslashes ("C:\\Users\\..."),
 ///                   or a raw string literal (r"C:\Users\...")
-// NOTE: customized install prefix for user-local install
-const DEFAULT_WRAPPER_PATH: &str = "/home/tyx/.local/bear/libexec/bear";
+// NOTE: this fork defaults to user-local install roots for no-sudo environments.
+// The final path is computed as: ${HOME}/.local/bear/libexec/bear
+const USER_LOCAL_BEAR_LIBEXEC: &str = ".local/bear/libexec/bear";
+// Fallback path when HOME is not available.
+const DEFAULT_WRAPPER_PATH: &str = "/usr/local/libexec/bear";
 
 /// Default preload library path
 /// Package creators: modify this entire path to change preload library location
 /// Note: $LIB will be expanded at runtime to the appropriate architecture subdirectory
 /// Note for Windows: preload isn't supported; feel free to ignore this path
-const DEFAULT_PRELOAD_PATH: &str = "/home/tyx/.local/bear/libexec/bear/$LIB";
+const DEFAULT_PRELOAD_PATH: &str = "/usr/local/libexec/bear/$LIB";
 
 // =============================================================================
 // PLATFORM-SPECIFIC EXECUTABLE AND LIBRARY NAMES (DO NOT CHANGE THESE)
@@ -64,8 +67,10 @@ fn main() {
         // =========================================================================
         // This section configures paths for normal builds (packages, manual installs)
 
-        let wrapper_path = format!("{}/{}", DEFAULT_WRAPPER_PATH, WRAPPER_NAME);
-        let preload_path = format!("{}/{}", DEFAULT_PRELOAD_PATH, PRELOAD_NAME);
+        let wrapper_root = wrapper_root();
+        let preload_root = preload_root();
+        let wrapper_path = format!("{}/{}", wrapper_root, WRAPPER_NAME);
+        let preload_path = format!("{}/{}", preload_root, PRELOAD_NAME);
 
         println!("cargo:rustc-env=WRAPPER_EXECUTABLE_PATH={}", wrapper_path);
         println!("cargo:rustc-env=PRELOAD_LIBRARY_PATH={}", preload_path);
@@ -82,7 +87,22 @@ fn main() {
 
     // Re-run build script if environment changes
     println!("cargo:rerun-if-env-changed=PATH");
+    println!("cargo:rerun-if-env-changed=HOME");
     println!("cargo:rerun-if-env-changed=CARGO_FEATURE_ALLOW_INTEGRATION_TESTS");
+}
+
+fn wrapper_root() -> String {
+    match std::env::var("HOME") {
+        Ok(home) if !home.is_empty() => format!("{home}/{USER_LOCAL_BEAR_LIBEXEC}"),
+        _ => DEFAULT_WRAPPER_PATH.to_string(),
+    }
+}
+
+fn preload_root() -> String {
+    match std::env::var("HOME") {
+        Ok(home) if !home.is_empty() => format!("{home}/{USER_LOCAL_BEAR_LIBEXEC}/$LIB"),
+        _ => DEFAULT_PRELOAD_PATH.to_string(),
+    }
 }
 
 /// Configure paths for integration testing
